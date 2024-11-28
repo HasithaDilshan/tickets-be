@@ -42,6 +42,9 @@ public class TicketService implements TicketPool.TicketPoolListener {
 
     public void configure(Configuration config) {
         this.currentConfig = config;
+        this.currentConfig.setTicketReleaseRate(1000 / config.getTicketReleaseRate());
+        this.currentConfig.setCustomerRetrievalRate(1000 / config.getCustomerRetrievalRate());
+        this.currentConfig = config;
         ticketPool.setMaxCapacity(config.getMaxTicketCapacity());
         String configMessage = String.format(
                 "Configuration updated:\n" +

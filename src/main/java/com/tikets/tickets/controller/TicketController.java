@@ -1,11 +1,8 @@
 package com.tikets.tickets.controller;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import com.tikets.tickets.model.*;
 import com.tikets.tickets.service.TicketService;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/tickets")
