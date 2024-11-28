@@ -14,7 +14,6 @@ public class TicketController {
 
     private final TicketService ticketService;
 
-    @Autowired
     public TicketController(TicketService ticketService) {
         this.ticketService = ticketService;
     }
@@ -36,7 +35,7 @@ public class TicketController {
 
     // @GetMapping("/status")
     // public String getStatus() {
-    //     return ticketService.getStatus();
+    // return ticketService.getStatus();
     // }
 
     @PostMapping("/vendor/add")
@@ -57,20 +56,5 @@ public class TicketController {
     @PostMapping("/customer/remove")
     public void removeCustomer() {
         ticketService.removeCustomer();
-    }
-
-    @GetMapping("/all")
-    public List<Ticket> getAllTickets() {
-        return ticketService.getAllTickets();
-    }
-
-    @GetMapping("/customers")
-    public List<Customer> getAllCustomers() {
-        return ticketService.getAllCustomers();
-    }
-
-    @GetMapping("/vendors")
-    public List<Vendor> getAllVendors() {
-        return ticketService.getAllVendors();
     }
 }

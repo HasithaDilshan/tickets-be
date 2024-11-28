@@ -1,5 +1,6 @@
 package com.tikets.tickets.service;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import com.tikets.tickets.model.Customer;
@@ -12,22 +13,24 @@ import java.util.List;
 public class CustomerService {
     private List<Thread> customerThreads = new ArrayList<>();
 
-    public void startCustomers(int numCustomers, int retrievalInterval, TicketPool ticketPool) {
+    private final LogService logService;
+
+    @Autowired
+    public CustomerService(LogService logService) {
+        this.logService = logService;
+    }
+
+    public void seedCustomers(int numCustomers, int retrievalInterval, TicketPool ticketPool) {
         for (int i = 0; i < numCustomers; i++) {
-            Customer customer = new Customer(i, retrievalInterval, false, ticketPool);
-            Thread thread = new Thread(customer);
-            customerThreads.add(thread);
-            thread.start();
-            // ticketPool.queueCustomer(customer);
+            addCustomer(retrievalInterval, ticketPool);
         }
     }
 
-    public Thread addCustomer(int retrievalInterval, TicketPool ticketPool, boolean isVip) {
-        Customer customer = new Customer(customerThreads.size(), retrievalInterval, isVip, ticketPool);
+    public Thread addCustomer(int retrievalInterval, TicketPool ticketPool) {
+        Customer customer = new Customer(customerThreads.size(), retrievalInterval, ticketPool, logService);
         Thread thread = new Thread(customer);
         customerThreads.add(thread);
         thread.start();
-        // ticketPool.queueCustomer(customer);
         return thread;
     }
 

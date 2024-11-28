@@ -1,8 +1,11 @@
 package com.tikets.tickets.service;
 
+import com.tikets.tickets.Exceptions.ConfigurationNotSetException;
+import com.tikets.tickets.Exceptions.NoCustomersToRemoveException;
+import com.tikets.tickets.Exceptions.NoVendorsToRemoveException;
+import com.tikets.tickets.Exceptions.SimulationAlreadyRunningException;
+import com.tikets.tickets.Exceptions.SimulationNotRunningException;
 import com.tikets.tickets.model.*;
-import com.tikets.tickets.repository.*;
-import com.tikets.tickets.util.LoggingUtil;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -18,35 +21,27 @@ public class TicketService implements TicketPool.TicketPoolListener {
     private final TicketPool ticketPool;
     private final VendorService vendorService;
     private final CustomerService customerService;
-    private final TicketRepository ticketRepository;
-    private final CustomerRepository customerRepository;
-    private final VendorRepository vendorRepository;
     private boolean isSimulationRunning = false;
 
     private Configuration currentConfig;
     private List<Thread> activeThreads = new CopyOnWriteArrayList<>();
     private ReentrantLock lock = new ReentrantLock();
+    private final LogService logService;
 
     @Autowired
     private SimpMessagingTemplate messagingTemplate;
 
-    @Autowired
     public TicketService(TicketPool ticketPool, VendorService vendorService, CustomerService customerService,
-            TicketRepository ticketRepository, CustomerRepository customerRepository,
-            VendorRepository vendorRepository) {
+            LogService logService) {
         this.ticketPool = ticketPool;
         this.vendorService = vendorService;
         this.customerService = customerService;
-        this.ticketRepository = ticketRepository;
-        this.customerRepository = customerRepository;
-        this.vendorRepository = vendorRepository;
-
         this.ticketPool.addListener(this);
+        this.logService = logService;
     }
 
     public void configure(Configuration config) {
         this.currentConfig = config;
-        ticketPool.setMaxCapacity(config.getMaxTicketCapacity());
         ticketPool.setMaxCapacity(config.getMaxTicketCapacity());
         String configMessage = String.format(
                 "Configuration updated:\n" +
@@ -56,32 +51,29 @@ public class TicketService implements TicketPool.TicketPoolListener {
                 config.getMaxTicketCapacity(),
                 config.getTicketReleaseRate(),
                 config.getCustomerRetrievalRate());
-        sendLogUpdate(configMessage);
+        logService.logInfo(configMessage);
     }
 
     public void startSimulation() {
         lock.lock();
         try {
             if (currentConfig == null) {
-                sendLogUpdate("Please configure the simulation first.");
-                return;
+                throw new ConfigurationNotSetException();
             }
             if (isSimulationRunning) {
-                sendLogUpdate("Simulation is already running.");
-                return;
+                throw new SimulationAlreadyRunningException();
             }
-            vendorService.startVendors(5, currentConfig.getTicketReleaseRate(),
-                    currentConfig.getTicketReleaseRate(),
+            vendorService.seedVendors(5, currentConfig.getTicketReleaseRate(), currentConfig.getTotalTickets(),
                     ticketPool);
-            customerService.startCustomers(10, currentConfig.getCustomerRetrievalRate(),
-                    ticketPool);
+            customerService.seedCustomers(8, currentConfig.getCustomerRetrievalRate(), ticketPool);
             activeThreads.addAll(vendorService.getVendorThreads());
             activeThreads.addAll(customerService.getCustomerThreads());
-
             isSimulationRunning = true;
-            sendLogUpdate("Simulation Started");
-            sendLogUpdate("Total vendors: " + vendorService.getVendorThreadsSize());
-            sendLogUpdate("Total customers: " + customerService.getCustomerThreadsSize());
+            logService.logInfo("Simulation Started");
+            logService.logInfo("Total vendors: " + vendorService.getVendorThreadsSize());
+            logService.logInfo("Total customers: " + customerService.getCustomerThreadsSize());
+        } catch (ConfigurationNotSetException | SimulationAlreadyRunningException e) {
+            logService.logError(e.getMessage(), e);
         } finally {
             lock.unlock();
         }
@@ -91,8 +83,7 @@ public class TicketService implements TicketPool.TicketPoolListener {
         lock.lock();
         try {
             if (!isSimulationRunning) {
-                sendLogUpdate("Simulation is not running.");
-                return;
+                throw new SimulationNotRunningException();
             }
             for (Thread thread : activeThreads) {
                 thread.interrupt();
@@ -101,7 +92,9 @@ public class TicketService implements TicketPool.TicketPoolListener {
             vendorService.getVendorThreads().clear();
             customerService.getCustomerThreads().clear();
             isSimulationRunning = false;
-            sendLogUpdate("Simulation Stopped");
+            logService.logInfo("Simulation Stopped");
+        } catch (SimulationNotRunningException e) {
+            logService.logError(e.getMessage(), e);
         } finally {
             lock.unlock();
         }
@@ -111,13 +104,14 @@ public class TicketService implements TicketPool.TicketPoolListener {
         lock.lock();
         try {
             if (!isSimulationRunning) {
-                sendLogUpdate("Cannot add vendor. Simulation is not running.");
-                return;
+                throw new SimulationNotRunningException();
             }
             Thread vendorThread = vendorService.addVendor(currentConfig.getTicketReleaseRate(),
-                    currentConfig.getTicketReleaseRate(), ticketPool);
+                    currentConfig.getTotalTickets(), ticketPool);
             activeThreads.add(vendorThread);
-            sendLogUpdate("Vendor added. Total vendors: " + vendorService.getVendorThreadsSize());
+            logService.logInfo("Vendor added. Total vendors: " + vendorService.getVendorThreadsSize());
+        } catch (SimulationNotRunningException e) {
+            logService.logError(e.getMessage(), e);
         } finally {
             lock.unlock();
         }
@@ -127,18 +121,18 @@ public class TicketService implements TicketPool.TicketPoolListener {
         lock.lock();
         try {
             if (!isSimulationRunning) {
-                sendLogUpdate("Cannot remove vendor. Simulation is not running.");
-                return;
+                throw new SimulationNotRunningException();
             }
             if (vendorService.getVendorThreadsSize() == 0) {
-                sendLogUpdate("No vendors to remove. Vendor list is empty.");
-                return;
+                throw new NoVendorsToRemoveException();
             }
             vendorService.removeVendor();
             if (!activeThreads.isEmpty()) {
                 activeThreads.remove(activeThreads.size() - 1);
-                sendLogUpdate("Vendor removed. Remaining vendors: " + vendorService.getVendorThreadsSize());
+                logService.logInfo("Vendor removed. Remaining vendors: " + vendorService.getVendorThreadsSize());
             }
+        } catch (SimulationNotRunningException | NoVendorsToRemoveException e) {
+            logService.logError(e.getMessage(), e);
         } finally {
             lock.unlock();
         }
@@ -148,14 +142,14 @@ public class TicketService implements TicketPool.TicketPoolListener {
         lock.lock();
         try {
             if (!isSimulationRunning) {
-                sendLogUpdate("Cannot add customer. Simulation is not running.");
-                return;
+                throw new SimulationNotRunningException();
             }
-            Thread customerThread = customerService.addCustomer(currentConfig.getCustomerRetrievalRate(), ticketPool,
-                    isVip);
+            Thread customerThread = customerService.addCustomer(currentConfig.getCustomerRetrievalRate(), ticketPool);
             activeThreads.add(customerThread);
-            sendLogUpdate("Customer added (VIP: " + isVip + "). Total customers: "
+            logService.logInfo("Customer added (VIP: " + isVip + "). Total customers: "
                     + customerService.getCustomerThreadsSize());
+        } catch (SimulationNotRunningException e) {
+            logService.logError(e.getMessage(), e);
         } finally {
             lock.unlock();
         }
@@ -165,44 +159,27 @@ public class TicketService implements TicketPool.TicketPoolListener {
         lock.lock();
         try {
             if (!isSimulationRunning) {
-                sendLogUpdate("Cannot remove customer. Simulation is not running.");
-                return;
+                throw new SimulationNotRunningException();
             }
             if (customerService.getCustomerThreadsSize() == 0) {
-                sendLogUpdate("No customers to remove. Customer list is empty.");
-                return;
+                throw new NoCustomersToRemoveException();
             }
             customerService.removeCustomer();
             if (!activeThreads.isEmpty()) {
                 activeThreads.remove(activeThreads.size() - 1);
             }
-            sendLogUpdate("Customer removed. Remaining customers: " + customerService.getCustomerThreadsSize());
+            logService.logInfo("Customer removed. Remaining customers: " + customerService.getCustomerThreadsSize());
+        } catch (SimulationNotRunningException | NoCustomersToRemoveException e) {
+            logService.logError(e.getMessage(), e);
         } finally {
             lock.unlock();
         }
     }
 
-    public List<Ticket> getAllTickets() {
-        return ticketRepository.findAll();
-    }
-
-    public List<Customer> getAllCustomers() {
-        return customerRepository.findAll();
-    }
-
-    public List<Vendor> getAllVendors() {
-        return vendorRepository.findAll();
-    }
-
     @Override
     public void onTicketPoolChange(String logMessage, int ticketCount) {
-        sendLogUpdate(logMessage);
+        logService.logInfo(logMessage);
         sendTicketCountUpdate(ticketCount);
-    }
-
-    private void sendLogUpdate(String message) {
-        messagingTemplate.convertAndSend("/tickets/logs", message);
-        LoggingUtil.logInfo(message);
     }
 
     private void sendTicketCountUpdate(int count) {
