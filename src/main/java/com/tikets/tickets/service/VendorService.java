@@ -14,7 +14,7 @@ public class VendorService {
 
     public void startVendors(int numVendors, int ticketsPerRelease, int releaseInterval, TicketPool ticketPool) {
         for (int i = 0; i < numVendors; i++) {
-            Vendor vendor = new Vendor(i, ticketsPerRelease, releaseInterval, ticketPool);
+            Vendor vendor = new Vendor(i, releaseInterval, ticketPool);
             Thread thread = new Thread(vendor);
             vendorThreads.add(thread);
             thread.start();
@@ -22,7 +22,7 @@ public class VendorService {
     }
 
     public Thread addVendor(int ticketsPerRelease, int releaseInterval, TicketPool ticketPool) {
-        Vendor vendor = new Vendor(vendorThreads.size(), ticketsPerRelease, releaseInterval, ticketPool);
+        Vendor vendor = new Vendor(vendorThreads.size(), releaseInterval, ticketPool);
         Thread thread = new Thread(vendor);
         vendorThreads.add(thread);
         thread.start();

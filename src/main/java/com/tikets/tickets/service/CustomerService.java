@@ -18,6 +18,7 @@ public class CustomerService {
             Thread thread = new Thread(customer);
             customerThreads.add(thread);
             thread.start();
+            // ticketPool.queueCustomer(customer);
         }
     }
 
@@ -26,6 +27,7 @@ public class CustomerService {
         Thread thread = new Thread(customer);
         customerThreads.add(thread);
         thread.start();
+        // ticketPool.queueCustomer(customer);
         return thread;
     }
 

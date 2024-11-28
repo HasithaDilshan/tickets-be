@@ -1,7 +1,5 @@
 package com.tikets.tickets.model;
 
-import java.util.concurrent.TimeUnit;
-
 import jakarta.persistence.*;
 
 @Entity
@@ -34,11 +32,7 @@ public class Customer implements Runnable {
     public void run() {
         while (!Thread.currentThread().isInterrupted()) {
             try {
-                Ticket ticket = ticketPool.removeTicket(isVip);
-                if (ticket != null) {
-                    System.out.println("Customer " + customerId + (isVip ? " (VIP)" : "") + " bought ticket "
-                            + ticket.getTicketId());
-                }
+                ticketPool.removeTicket(this); // Remove ticket from pool can be used in further logic if needed
                 Thread.sleep(retrievalInterval);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();

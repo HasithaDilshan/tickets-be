@@ -2,6 +2,8 @@ package com.tikets.tickets.service;
 
 import com.tikets.tickets.model.*;
 import com.tikets.tickets.repository.*;
+import com.tikets.tickets.util.LoggingUtil;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
@@ -68,13 +70,14 @@ public class TicketService implements TicketPool.TicketPoolListener {
                 sendLogUpdate("Simulation is already running.");
                 return;
             }
-            // vendorService.startVendors(5, currentConfig.getTicketReleaseRate(),
-            //         currentConfig.getTicketReleaseRate(),
-            //         ticketPool);
-            // customerService.startCustomers(10, currentConfig.getCustomerRetrievalRate(),
-            //         ticketPool);
+            vendorService.startVendors(5, currentConfig.getTicketReleaseRate(),
+                    currentConfig.getTicketReleaseRate(),
+                    ticketPool);
+            customerService.startCustomers(10, currentConfig.getCustomerRetrievalRate(),
+                    ticketPool);
             activeThreads.addAll(vendorService.getVendorThreads());
             activeThreads.addAll(customerService.getCustomerThreads());
+
             isSimulationRunning = true;
             sendLogUpdate("Simulation Started");
             sendLogUpdate("Total vendors: " + vendorService.getVendorThreadsSize());
@@ -95,6 +98,8 @@ public class TicketService implements TicketPool.TicketPoolListener {
                 thread.interrupt();
             }
             activeThreads.clear();
+            vendorService.getVendorThreads().clear();
+            customerService.getCustomerThreads().clear();
             isSimulationRunning = false;
             sendLogUpdate("Simulation Stopped");
         } finally {
@@ -197,6 +202,7 @@ public class TicketService implements TicketPool.TicketPoolListener {
 
     private void sendLogUpdate(String message) {
         messagingTemplate.convertAndSend("/tickets/logs", message);
+        LoggingUtil.logInfo(message);
     }
 
     private void sendTicketCountUpdate(int count) {
